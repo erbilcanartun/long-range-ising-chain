@@ -1,7 +1,7 @@
 from mpmath import mp
 import matplotlib.pyplot as plt
 
-mp.dps = 30  # Set desired precision
+mp.dps = 40  # Set desired precision
 
 plus_configs = [
     ([1,1,1], lambda J1, J2: 2*J1 + J2),
@@ -221,5 +221,106 @@ def plot_rg_steps_vs_r(J0, n, max_k=10, num_steps=1, plot_up_to_r=None):
     plt.ylabel('J(r)')
     plt.title(f'J(r) vs r for RG steps, J0={J0}, n={n}')
     plt.legend()
+    plt.grid(True)
+    plt.show()
+
+def find_J_c(n, max_k=1000, tol=1e-6, J_low=1e-6, J_high=3.0):
+    """
+    Finds the critical J_c for the given n using binary search and RG flow simulation.
+    
+    This function performs a binary search to find the critical coupling J_c where the 
+    renormalization group (RG) flow transitions between growing and decaying for the 
+    interaction J(d) = J0 / d^n. It simulates the RG flow and checks the behavior of 
+    the coupling at r=2 after a minimum number of steps to avoid initial fluctuations.
+    
+    Parameters:
+    n (float): The exponent in the power-law interaction. Must be 0 < n < 2.
+    max_k (int): Maximum distance r to consider in the RG flow.
+    tol (float, optional): Tolerance for the binary search convergence. Default is 1e-6.
+    J_low (float, optional): Lower bound for binary search. Default is 0.0.
+    J_high (float, optional): Upper bound for binary search. Default is 3.0.
+    
+    Returns:
+    mp.mpf: The critical J_c value.
+    
+    Raises:
+    ValueError: If n is not in (0, 2) or max_k is too small.
+    """
+    # Check if n is within the allowed range (0 < n < 2)
+    if n <= 0 or n >= 2:
+        raise ValueError("n must be between 0 and 2, excluding the edges.")
+    
+    start_track = 3  # Start checking after 3 RG steps to avoid initial fluctuations
+    max_steps = 5   # Maximum number of RG steps to perform
+    tol = mp.mpf(tol)
+    J_low = mp.mpf(J_low)
+    J_high = mp.mpf(J_high)
+    min_max_k = 2  # Since we only need at least r=2
+    if max_k < min_max_k:
+        raise ValueError(f"max_k should be at least {min_max_k} for smooth and correct calculation with r=2")
+
+    def compute_flow(J0):
+        # Initialize J function for initial step
+        J_func = lambda d: get_J(d, J0, n) if d > 0 else mp.mpf(0)
+        rs = list(range(1, max_k + 1))
+        all_Js = [[J_func(r) for r in rs]]  # Store J values at each step
+
+        for step in range(1, max_steps + 1):
+            Jps = []
+            for r in rs:
+                start = 3 * r + 1
+                Jp = compute_J_prime_func(start, J_func)
+                Jps.append(Jp)
+            all_Js.append(Jps)
+
+            # After start_track steps, check the change in J(r=2) from previous to current
+            if step >= start_track:
+                J_r2_current = Jps[1]  # J at r=2 (index 1)
+                J_r2_previous = all_Js[-2][1]  # J at r=2 from previous step
+                if J_r2_current > J_r2_previous:
+                    return all_Js, True  # Growing (ferromagnetic)
+                if J_r2_current < J_r2_previous:
+                    return all_Js, False  # Decaying (paramagnetic)
+
+            # Update J_func for the next step
+            J_dict = {r: Jps[r-1] for r in rs}
+            J_func = lambda d: J_dict.get(d, mp.mpf(0)) if d > 0 else mp.mpf(0)
+
+        # Fallback if no decision within max_steps: compare initial and final J(r=2)
+        J_r2_initial = all_Js[0][1]
+        J_r2_final = all_Js[-1][1]
+        return all_Js, J_r2_final > J_r2_initial
+
+    # Binary search loop
+    iter_count = 0
+    while J_high - J_low > tol and iter_count < 100:
+        iter_count += 1
+        J_mid = (J_low + J_high) / 2
+        all_Js, is_growing = compute_flow(J_mid)
+        if is_growing:
+            J_high = J_mid  # Growing: search lower half
+        else:
+            J_low = J_mid  # Decaying: search upper half
+    return J_mid
+
+def plot_J_c_vs_n(n_values, max_k=500, tol=1e-4):
+    J_c_values = []
+    min_max_k = 2  # Since we only need r=2
+    if max_k < min_max_k:
+        raise ValueError(f"max_k should be at least {min_max_k} for smooth and correct calculation with r=2")
+
+    for n in n_values:
+        try:
+            J_c = find_J_c(n, max_k, tol, J_low=1e-3, J_high=3.0)
+            J_c_values.append(1/float(J_c))
+            print(f"For n={n}, J_c={J_c}")
+        except ValueError as e:
+            print(f"For n={n}, error: {e}")
+            J_c_values.append(None)  # Append None for invalid n
+
+    plt.figure()
+    plt.plot(n_values, J_c_values, marker='o')
+    plt.xlabel('n')
+    plt.ylabel('$1/J_c$')
     plt.grid(True)
     plt.show()
