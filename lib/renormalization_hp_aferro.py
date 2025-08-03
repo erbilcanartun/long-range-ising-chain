@@ -251,7 +251,7 @@ def plot_rg_steps_vs_r(J0, n, max_k=10, num_steps=1, plot_up_to_r=None, colormap
     if fig_name:
         fig.savefig("../results/" + fig_name)
 
-def find_J_c(n, max_k=1000, tol=1e-6, J_low=1e-10, J_high=3.0):
+def find_J_c(n, max_k=1000, tol=1e-6, J_low=-3.0, J_high=-1e-10):
     """
     Finds the critical J_c for the given n using binary search and RG flow simulation.
 
