@@ -6,17 +6,17 @@ from utils import mp_logsumexp
 mp.dps = 40  # Set desired precision
 
 plus_configs = [
-    ([1,1,1], lambda J1, J2: 2*J1 + J2),
-    ([1,1,-1], lambda J1, J2: -J2),
-    ([1,-1,1], lambda J1, J2: -2*J1 + J2),
-    ([-1,1,1], lambda J1, J2: -J2)
+    ([1,1,1], lambda J2, J4: 2*J2 + J4),
+    ([1,1,-1], lambda J2, J4: -J4),
+    ([1,-1,1], lambda J2, J4: -2*J2 + J4),
+    ([-1,1,1], lambda J2, J4: -J4)
 ]
 
 minus_configs = [
-    ([-1,-1,-1], lambda J1, J2: 2*J1 + J2),
-    ([-1,-1,1], lambda J1, J2: -J2),
-    ([-1,1,-1], lambda J1, J2: -2*J1 + J2),
-    ([1,-1,-1], lambda J1, J2: -J2)
+    ([-1,-1,-1], lambda J2, J4: 2*J2 + J4),
+    ([-1,-1,1], lambda J2, J4: -J4),
+    ([-1,1,-1], lambda J2, J4: -2*J2 + J4),
+    ([1,-1,-1], lambda J2, J4: -J4)
 ]
 
 def get_J(d, J0, n):
@@ -25,21 +25,23 @@ def get_J(d, J0, n):
     return mp.mpf(J0) / mp.power(mp.mpf(d), mp.mpf(n))
 
 def compute_J_prime(start, J0, n):
-    J1 = get_J(1, J0, n)
     J2 = get_J(2, J0, n)
+    J4 = get_J(4, J0, n)
+    left_pos = [1, 3, 5]
+    right_pos = [start, start + 2, start + 4]
     distances = []
     for iL in range(3):
         for iR in range(3):
-            d = (start + iR) - (1 + iL)
+            d = abs(right_pos[iR] - left_pos[iL])
             distances.append((iL, iR, d))
 
     def collect_totals(is_pp):
         confsR = plus_configs if is_pp else minus_configs
         totals = []
         for spinsL, El_func in plus_configs:
-            El = El_func(J1, J2)
+            El = El_func(J2, J4)
             for spinsR, Er_func in confsR:
-                Er = Er_func(J1, J2)
+                Er = Er_func(J2, J4)
                 Eint = mp.mpf(0)
                 for iL, iR, d in distances:
                     sign = mp.mpf(spinsL[iL] * spinsR[iR])
@@ -57,21 +59,23 @@ def compute_J_prime(start, J0, n):
     return mp.mpf('0.5') * (log_R_pp - log_R_pm)
 
 def compute_J_prime_func(start, J_func):
-    J1 = J_func(1)
     J2 = J_func(2)
+    J4 = J_func(4)
+    left_pos = [1, 3, 5]
+    right_pos = [start, start + 2, start + 4]
     distances = []
     for iL in range(3):
         for iR in range(3):
-            d = (start + iR) - (1 + iL)
+            d = abs(right_pos[iR] - left_pos[iL])
             distances.append((iL, iR, d))
 
     def collect_totals(is_pp):
         confsR = plus_configs if is_pp else minus_configs
         totals = []
         for spinsL, El_func in plus_configs:
-            El = El_func(J1, J2)
+            El = El_func(J2, J4)
             for spinsR, Er_func in confsR:
-                Er = Er_func(J1, J2)
+                Er = Er_func(J2, J4)
                 Eint = mp.mpf(0)
                 for iL_idx, iR_idx, d in distances:
                     sign = mp.mpf(spinsL[iL_idx] * spinsR[iR_idx])
@@ -87,6 +91,7 @@ def compute_J_prime_func(start, J_func):
     if log_R_pm == mp.ninf:
         return mp.inf
     return mp.mpf('0.5') * (log_R_pp - log_R_pm)
+
 
 # Utility functions that are common
 
