@@ -1,5 +1,7 @@
 from mpmath import mp
 import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize
+
 
 mp.dps = 40  # Set desired precision
 
@@ -71,7 +73,7 @@ def compute_J_prime_func(start, J_func):
         for iR in range(3):
             d = (start + iR) - (1 + iL)
             distances.append((iL, iR, d))
-    
+
     def collect_totals(is_pp):
         confsR = plus_configs if is_pp else minus_configs
         totals = []
@@ -86,7 +88,7 @@ def compute_J_prime_func(start, J_func):
                 total = El + Er + Eint
                 totals.append(total)
         return totals
-    
+
     totals_pp = collect_totals(True)
     totals_pm = collect_totals(False)
     log_R_pp = mp_logsumexp(totals_pp)
@@ -105,7 +107,7 @@ def plot_first_renormalized_J(max_k, J0, n):
         ks.append(k)
         Jps.append(Jp)
         print(f"For cluster {k} (right starting at {start}), J' = {Jp}")
-    
+
     plt.figure()
     plt.plot(ks, [float(j) for j in Jps], marker='o')
     plt.xlabel('Cluster number k')
@@ -117,7 +119,7 @@ def plot_first_renormalized_J(max_k, J0, n):
 def plot_non_renormalized_J(J0, n, max_r=30):
     rs = list(range(1, max_r + 1))
     Js = [get_J(r, J0, n) for r in rs]
-    
+
     plt.figure()
     plt.plot(rs, [float(j) for j in Js], marker='o')
     plt.xlabel('Distance r')
@@ -130,7 +132,7 @@ def plot_both(J0, n, max_k=10):
     # Non-renormalized
     rs = list(range(1, max_k + 1))
     Js = [get_J(r, J0, n) for r in rs]
-    
+
     # Renormalized
     effective_rs = list(range(1, max_k + 1))
     Jps = []
@@ -139,7 +141,7 @@ def plot_both(J0, n, max_k=10):
         Jp = compute_J_prime(start, J0, n)
         Jps.append(Jp)
         print(f"For cluster {k} (effective r={effective_rs[k-1]}), J' = {Jp}")
-    
+
     plt.figure()
     plt.plot(rs, [float(j) for j in Js], label='Non-renormalized J(r)', marker='o', linestyle='-')
     plt.plot(effective_rs, [float(j) for j in Jps], label='Renormalized J\'(r)', marker='x', linestyle='--')
@@ -155,12 +157,12 @@ def generate_rg_flow(J0, n, max_k, num_steps, show_first=0, num_r_to_plot=5):
     rs = list(range(1, max_k + 1))
     initial_Js = [J_func(r) for r in rs]
     all_Js = [initial_Js]
-    
+
     if show_first > 0:
         print("Step 0 (initial):")
         for i in range(min(show_first, len(initial_Js))):
             print(f"  J({i+1}) = {initial_Js[i]}")
-    
+
     for step in range(1, num_steps + 1):
         Jps = []
         for r in rs:
@@ -168,16 +170,16 @@ def generate_rg_flow(J0, n, max_k, num_steps, show_first=0, num_r_to_plot=5):
             Jp = compute_J_prime_func(start, J_func)
             Jps.append(Jp)
         all_Js.append(Jps)
-        
+
         if show_first > 0:
             print(f"Step {step}:")
             for i in range(min(show_first, len(Jps))):
                 print(f"  J({i+1}) = {Jps[i]}")
-        
+
         # Update J_func for next step
         J_dict = {r: Jps[r-1] for r in rs}
         J_func = lambda d: J_dict.get(d, mp.mpf(0)) if d > 0 else mp.mpf(0)
-    
+
     # Plot J vs RG step for first num_r_to_plot r
     plt.figure()
     steps = range(len(all_Js))
@@ -192,11 +194,11 @@ def generate_rg_flow(J0, n, max_k, num_steps, show_first=0, num_r_to_plot=5):
     plt.grid(True)
     plt.show()
 
-def plot_rg_steps_vs_r(J0, n, max_k=10, num_steps=1, plot_up_to_r=None):
+def plot_rg_steps_vs_r(J0, n, max_k=10, num_steps=1, plot_up_to_r=None, colormap=False, fig_name=False):
     J_func = lambda d: get_J(d, J0, n) if d > 0 else mp.mpf(0)
     rs = list(range(1, max_k + 1))
     all_Js = [[J_func(r) for r in rs]]
-    
+
     for step in range(1, num_steps + 1):
         Jps = []
         for r in rs:
@@ -204,52 +206,80 @@ def plot_rg_steps_vs_r(J0, n, max_k=10, num_steps=1, plot_up_to_r=None):
             Jp = compute_J_prime_func(start, J_func)
             Jps.append(Jp)
         all_Js.append(Jps)
-        
+
         # Update J_func for next step
         J_dict = {r: Jps[r-1] for r in rs}
         J_func = lambda d: J_dict.get(d, mp.mpf(0)) if d > 0 else mp.mpf(0)
-    
+
     up_to = plot_up_to_r if plot_up_to_r is not None else max_k
     plot_rs = list(range(1, up_to + 1))
-    
-    # Plot J vs r for each RG step
-    plt.figure()
-    for step in range(num_steps + 1):
-        Js = all_Js[step][:up_to]
-        plt.plot(plot_rs, [float(j) for j in Js], label=f'Step {step}', marker='o')
-    plt.xlabel('Distance r')
-    plt.ylabel('J(r)')
-    plt.title(f'J(r) vs r for RG steps, J0={J0}, n={n}')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
 
-def find_J_c(n, max_k=1000, tol=1e-6, J_low=1e-6, J_high=3.0):
+    if colormap:
+        # Create figure and axes
+        fig, ax = plt.subplots()
+
+        # Plot J vs r for each RG step with color gradient
+        cmap = plt.cm.viridis
+        norm = Normalize(vmin=0, vmax=num_steps)
+        for step in range(num_steps + 1):
+            Js = all_Js[step][:up_to]
+            color = cmap(norm(step))
+            ax.plot(plot_rs, [float(j) for j in Js], color=color, marker='o')
+
+        # Add colorbar
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        plt.colorbar(sm, ax=ax, label='RG Step')
+
+        # Set labels and title
+        ax.set_xlabel('Distance r')
+        ax.set_ylabel('J(r)')
+        ax.set_title(f'J={J0}, n={n}')
+        ax.grid(True)
+        plt.show()
+
+    else:
+        # Plot J vs r for each RG step
+        fig, ax = plt.subplots()
+        for step in range(num_steps + 1):
+            Js = all_Js[step][:up_to]
+            ax.plot(plot_rs, [float(j) for j in Js], label=f'Step {step}', marker='o')
+        # Set labels and title
+        ax.set_xlabel('Distance r')
+        ax.set_ylabel('J(r)')
+        ax.set_title(f'J={J0}, n={n}')
+        ax.grid(True)
+        plt.legend()
+        plt.show()
+
+    if fig_name:
+        fig.savefig("../results/" + fig_name)
+
+def find_J_c(n, max_k=1000, tol=1e-6, J_low=1e-10, J_high=3.0):
     """
     Finds the critical J_c for the given n using binary search and RG flow simulation.
-    
+
     This function performs a binary search to find the critical coupling J_c where the 
     renormalization group (RG) flow transitions between growing and decaying for the 
     interaction J(d) = J0 / d^n. It simulates the RG flow and checks the behavior of 
     the coupling at r=2 after a minimum number of steps to avoid initial fluctuations.
-    
+
     Parameters:
     n (float): The exponent in the power-law interaction. Must be 0 < n < 2.
     max_k (int): Maximum distance r to consider in the RG flow.
     tol (float, optional): Tolerance for the binary search convergence. Default is 1e-6.
     J_low (float, optional): Lower bound for binary search. Default is 0.0.
     J_high (float, optional): Upper bound for binary search. Default is 3.0.
-    
+
     Returns:
     mp.mpf: The critical J_c value.
-    
+
     Raises:
     ValueError: If n is not in (0, 2) or max_k is too small.
     """
     # Check if n is within the allowed range (0 < n < 2)
     if n <= 0 or n >= 2:
         raise ValueError("n must be between 0 and 2, excluding the edges.")
-    
+
     start_track = 3  # Start checking after 3 RG steps to avoid initial fluctuations
     max_steps = 5   # Maximum number of RG steps to perform
     tol = mp.mpf(tol)
