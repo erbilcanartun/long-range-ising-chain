@@ -330,7 +330,7 @@ def find_J_c(n, max_k=1000, tol=1e-6, J_low=-3.0, J_high=-1e-10):
             J_low = J_mid  # Decaying: search upper half
     return J_mid
 
-def plot_J_c_vs_n(n_values, max_k=500, tol=1e-4):
+def plot_J_c_vs_n(n_values, max_k=500, tol=1e-4, J_low=-3.0, J_high=-1e-10):
     J_c_values = []
     min_max_k = 2  # Since we only need r=2
     if max_k < min_max_k:
@@ -338,7 +338,7 @@ def plot_J_c_vs_n(n_values, max_k=500, tol=1e-4):
 
     for n in n_values:
         try:
-            J_c = find_J_c(n, max_k, tol, J_low=1e-3, J_high=3.0)
+            J_c = find_J_c(n, max_k, tol, J_low, J_high)
             J_c_values.append(1/float(J_c))
             print(f"For n={n}, J_c={J_c}")
         except ValueError as e:
