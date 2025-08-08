@@ -1,9 +1,10 @@
 from mpmath import mp
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
+from tqdm import tqdm
 from utils import mp_logsumexp
 
-mp.dps = 40  # Set desired precision
+mp.dps = 30  # Set desired precision
 
 plus_configs = [
     ([1,1,1], lambda J2, J4: 2*J2 + J4),
@@ -133,7 +134,7 @@ def phase_sink(all_Js, skip_steps=3, track_rs=[2,3]):
         return 'undecided'
 
     # Skip the first skip_steps
-    tracked_flow = all_Js[skip_steps:]
+    tracked_flow = all_Js[skip_steps:skip_steps+2]
 
     # Check the last two steps
     if len(tracked_flow) < 2:
@@ -150,11 +151,12 @@ def phase_sink(all_Js, skip_steps=3, track_rs=[2,3]):
 
     if all_positive and S_last > S_prev:
         return 'ferro'
-    if S_last < S_prev:  # Strength decreasing towards zero
+    elif S_last < S_prev:  # Strength decreasing towards zero
         return 'disorder'
-    return 'undecided'
+    else:
+        return 'undecided'
 
-def find_Tc_fixed_p(n, p, max_k=1000, tol=1e-6, J_low=0.01, J_high=10.0, seed=42, max_steps=10):
+def find_Tc_fixed_p(n, p, max_k=1000, tol=1e-6, J_low=0.01, J_high=10.0, skip_steps=3, track_rs=[2,3], seed=42):
     """
     For fixed p, search for Tc (1/Jc) assuming disorder at high T (low J) and ordered at low T (high J).
     """
@@ -163,39 +165,12 @@ def find_Tc_fixed_p(n, p, max_k=1000, tol=1e-6, J_low=0.01, J_high=10.0, seed=42
     if p < 0 or p > 1:
         raise ValueError("p must be between 0 and 1.")
 
-    min_max_k = 4
-    if max_k < min_max_k:
-        raise ValueError(f"max_k should be at least {min_max_k}")
-
-    tol = mp.mpf(tol)
-    J_low = mp.mpf(J_low)  # High T
-    J_high = mp.mpf(J_high)  # Low T
-
     def compute_phase(J0):
-        all_Js = generate_rg_flow(J0, n, p, max_k, num_steps=max_steps, seed=seed)
-        phase = phase_sink(all_Js, skip_steps=3, track_rs=[2,3])
+        all_Js = generate_rg_flow(J0, n, p, max_k, num_steps=skip_steps+2, seed=seed)
+        phase = phase_sink(all_Js, skip_steps, track_rs)
         if phase == 'undecided':
-            print(f"Warning: Phase undecided for n={n}, p={p}, J={J0}; returning None")
-            return None  # Handle undecided case
-        return phase == 'disorder'  # True if disorder, False if ordered (ferro)
-
-    # Check assumption: disorder at high T (low J)
-    phase_low = compute_phase(J_low)
-    if phase_low is None:
-        print(f"For n={n}, p={p}, J_low={J_low}: Undecided phase at high T")
-        return None
-    if not phase_low:
-        print(f"For n={n}, p={p}: Assumption violated, not disorder at high T")
-        return None
-
-    # Check ordered at low T (high J)
-    phase_high = compute_phase(J_high)
-    if phase_high is None:
-        print(f"For n={n}, p={p}, J_high={J_high}: Undecided phase at low T")
-        return None
-    if phase_high:
-        print(f"For n={n}, p={p}: Disorder phase at low T, no transition")
-        return None
+            print(f"Warning: Phase undecided for n={n}, p={p}, J={J0}")
+        return phase == 'disorder'  # True if disorder, False if not
 
     # Bisection: find where phase changes from disorder (high T) to ordered (low T)
     iter_count = 0
@@ -203,9 +178,6 @@ def find_Tc_fixed_p(n, p, max_k=1000, tol=1e-6, J_low=0.01, J_high=10.0, seed=42
         iter_count += 1
         J_mid = (J_low + J_high) / 2
         phase_mid = compute_phase(J_mid)
-        if phase_mid is None:
-            print(f"For n={n}, p={p}, J_mid={J_mid}: Undecided phase, stopping bisection")
-            return None
         if phase_mid:
             J_low = J_mid  # Disorder: move to higher J (lower T)
         else:
@@ -213,9 +185,9 @@ def find_Tc_fixed_p(n, p, max_k=1000, tol=1e-6, J_low=0.01, J_high=10.0, seed=42
     Jc = (J_low + J_high) / 2
     return 1 / float(Jc)  # Tc = 1 / Jc
 
-def find_pc_fixed_T(n, T, max_k=1000, tol=1e-6, p_low=0.0, p_high=1.0, seed=42, max_steps=5):
+def find_pc_fixed_T(n, T, max_k=1000, tol=1e-6, p_low=0.0, p_high=1.0, skip_steps=3, track_rs=[2,3], seed=42):
     """
-    For fixed T (J = 1/T), search for critical p assuming ferro at low p and disorder at high p.
+    For fixed T (J = 1/T), search for critical p assuming ferro at low p.
     """
     if n <= 0 or n >= 2:
         raise ValueError("n must be between 0 and 2, excluding the edges.")
@@ -224,30 +196,12 @@ def find_pc_fixed_T(n, T, max_k=1000, tol=1e-6, p_low=0.0, p_high=1.0, seed=42, 
 
     J0 = mp.mpf(1.0 / T)  # Fixed J = 1/T
 
-    min_max_k = 4
-    if max_k < min_max_k:
-        raise ValueError(f"max_k should be at least {min_max_k}")
-
-    tol = mp.mpf(tol)
-    p_low = mp.mpf(p_low)
-    p_high = mp.mpf(p_high)
-
     def compute_phase(curr_p):
-        all_Js = generate_rg_flow(J0, n, float(curr_p), max_k, num_steps=max_steps, seed=seed)
-        phase = phase_sink(all_Js)
+        all_Js = generate_rg_flow(J0, n, float(curr_p), max_k, num_steps=skip_steps+2, seed=seed)
+        phase = phase_sink(all_Js, skip_steps, track_rs)
         if phase == 'undecided':
-            raise ValueError("Phase undecided; increase max_steps.")
-        return phase == 'ferro'  # True if ferro, False if disorder
-
-    # Check assumption: ferro at low p
-    phase_low_p = compute_phase(p_low)
-    if not phase_low_p:
-        return None  # Assumption violated: not ferro at low p
-
-    # Check disorder at high p
-    phase_high_p = compute_phase(p_high)
-    if phase_high_p:
-        return None  # Ferro at high p, no transition to disorder
+            print(f"Warning: Phase undecided for n={n}, p={curr_p}, J={J0}")
+        return phase == 'ferro'  # True if ferro, False if not
 
     # Bisection: find where phase changes from ferro (low p) to disorder (high p)
     iter_count = 0
@@ -260,3 +214,49 @@ def find_pc_fixed_T(n, T, max_k=1000, tol=1e-6, p_low=0.0, p_high=1.0, seed=42, 
         else:
             p_high = p_mid  # Disorder: move to lower p
     return float((p_low + p_high) / 2)
+
+def phase_identify(n, p, J):
+    all_Js = generate_rg_flow(J, n, p, max_k=5000, num_steps=5)
+    phase = phase_sink(all_Js)
+    return phase
+
+def plot_phase_diagram(n, p_values, one_over_J_values, max_k=5000, num_steps=5):
+    """
+    Generate phase diagram by scanning p, 1/J parameter space for fixed n
+    The marker size is dynamically adjusted based on the grid dimensions.
+    """
+    Disorder_Phase, Ferro_Phase, Undecided_Phase = [],[],[]
+    for i, p in enumerate(tqdm(p_values)):
+        for j, one_over_j in enumerate(one_over_J_values):
+            J = 1.0 / one_over_j
+            phase = phase_identify(n, p, J)
+            if phase == "disorder":
+                Disorder_Phase.append([p, one_over_j])
+            elif phase == "ferro":
+                Ferro_Phase.append([p, one_over_j])
+            else:
+                Undecided_Phase.append([p, one_over_j])
+    # Calculate appropriate marker size for plotting
+    grid_size = len(p_values) * len(one_over_J_values)
+    base_marker_size = 25 # Base size for a 10x10 grid
+    reference_grid_size = 100
+    ms = base_marker_size * np.sqrt(reference_grid_size / grid_size)
+    ms = max(1, min(ms, 12)) # Limit between 1 and 12
+    # Plot the results
+    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 6), dpi=100)
+    fig.set_facecolor("white")
+    plt.rc(group="font", family="Arial", weight="bold", size=10)
+    plt.rc(group="lines", linewidth=1)
+    plt.rc(group="axes", linewidth=2)
+    cdic = {"disorder":"grey",
+            "ferro":"red",
+            "undecided":"yellow"}
+    if Disorder_Phase: ax.plot(np.array(Disorder_Phase)[:,0], np.array(Disorder_Phase)[:,1], ls="", marker="s", mfc=cdic["disorder"], mec=cdic["disorder"], ms=ms, alpha=1)
+    if Ferro_Phase: ax.plot(np.array(Ferro_Phase)[:,0], np.array(Ferro_Phase)[:,1], ls="", marker="s", mfc=cdic["ferro"], mec=cdic["ferro"], ms=ms, alpha=1)
+    if Undecided_Phase: ax.plot(np.array(Undecided_Phase)[:,0], np.array(Undecided_Phase)[:,1], ls="", marker="s", mfc=cdic["undecided"], mec=cdic["undecided"], ms=ms, alpha=1)
+    ax.set_xlabel("p")
+    ax.set_ylabel("1/J")
+    ax.tick_params(axis="both", direction="in", width=2, length=4)
+    fig.tight_layout()
+    plt.show()
+    return Disorder_Phase, Ferro_Phase, Undecided_Phase
