@@ -215,12 +215,12 @@ def find_pc_fixed_T(n, T, max_k=1000, tol=1e-6, p_low=0.0, p_high=1.0, skip_step
             p_high = p_mid  # Disorder: move to lower p
     return float((p_low + p_high) / 2)
 
-def phase_identify(n, p, J):
-    all_Js = generate_rg_flow(J, n, p, max_k=5000, num_steps=5)
-    phase = phase_sink(all_Js)
+def phase_identify(n, p, J, skip_steps, track_rs):
+    all_Js = generate_rg_flow(J, n, p, max_k=5000, num_steps=skip_steps+2)
+    phase = phase_sink(all_Js, skip_steps, track_rs)
     return phase
 
-def plot_phase_diagram(n, p_values, one_over_J_values, max_k=5000, num_steps=5):
+def plot_phase_diagram(n, p_values, one_over_J_values, max_k=5000, skip_steps=3, track_rs=[2,3]):
     """
     Generate phase diagram by scanning p, 1/J parameter space for fixed n
     The marker size is dynamically adjusted based on the grid dimensions.
@@ -229,7 +229,7 @@ def plot_phase_diagram(n, p_values, one_over_J_values, max_k=5000, num_steps=5):
     for i, p in enumerate(tqdm(p_values)):
         for j, one_over_j in enumerate(one_over_J_values):
             J = 1.0 / one_over_j
-            phase = phase_identify(n, p, J)
+            phase = phase_identify(n, p, J, skip_steps, track_rs)
             if phase == "disorder":
                 Disorder_Phase.append([p, one_over_j])
             elif phase == "ferro":
@@ -249,8 +249,8 @@ def plot_phase_diagram(n, p_values, one_over_J_values, max_k=5000, num_steps=5):
     plt.rc(group="lines", linewidth=1)
     plt.rc(group="axes", linewidth=2)
     cdic = {"disorder":"grey",
-            "ferro":"red",
-            "undecided":"yellow"}
+            "ferro":"blue",
+            "undecided":"orange"}
     if Disorder_Phase: ax.plot(np.array(Disorder_Phase)[:,0], np.array(Disorder_Phase)[:,1], ls="", marker="s", mfc=cdic["disorder"], mec=cdic["disorder"], ms=ms, alpha=1)
     if Ferro_Phase: ax.plot(np.array(Ferro_Phase)[:,0], np.array(Ferro_Phase)[:,1], ls="", marker="s", mfc=cdic["ferro"], mec=cdic["ferro"], ms=ms, alpha=1)
     if Undecided_Phase: ax.plot(np.array(Undecided_Phase)[:,0], np.array(Undecided_Phase)[:,1], ls="", marker="s", mfc=cdic["undecided"], mec=cdic["undecided"], ms=ms, alpha=1)
