@@ -1,5 +1,5 @@
-from mpmath import mp
 import numpy as np
+from mpmath import mp
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from utils import mp_logsumexp
