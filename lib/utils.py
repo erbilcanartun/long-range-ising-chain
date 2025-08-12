@@ -1,4 +1,7 @@
 from mpmath import mp
+import pandas as pd
+import os
+
 
 def mp_logsumexp(values):
     if not values:
@@ -9,61 +12,48 @@ def mp_logsumexp(values):
         sum_exp += mp.exp(v - max_val)
     return max_val + mp.log(sum_exp)
 
-
-import os
-import pandas as pd
-
 # Function to save results to a CSV file
-def save_exponents_csv(n_values, Jcs, nus, alphas, etas, deltas, filename="results/exponents.csv"):
+def save_exponents_csv(n_values, Jcs, nus, alphas, etas, deltas, betas, gammas, filename="../data/exponents.csv"):
     """
-    Save critical exponents to a CSV file.
+    Save critical exponents and critical couplings to a CSV file.
     
-    Args:
-        n_values (list): List of interaction exponents n.
-        Jcs (list): List of critical coupling strengths J_c.
-        nus (list): List of correlation length exponents ν.
-        alphas (list): List of specific heat exponents α.
-        etas (list): List of correlation function exponents η.
-        deltas (list): List of magnetization exponents δ.
-        filename (str): Name of the file to save results (default: 'results/exponents.csv').
+    Parameters:
+    n_values (array): Array of power-law exponents (a in the paper)
+    Jcs (array): Array of critical couplings
+    nus, alphas, etas, deltas, betas, gammas (arrays): Critical exponents
+    filename (str): Path to save the CSV file
     """
+    # Ensure the directory exists
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    
+    # Create DataFrame
     data = {
-        "n": list(map(float, n_values)),
-        "Jc": list(map(float, Jcs)),
-        "nu": list(map(float, nus)),
-        "alpha": list(map(float, alphas)),
-        "eta": list(map(float, etas)),
-        "delta": list(map(float, deltas))
+        'n': n_values,
+        'Jc': Jcs,
+        'nu': nus,
+        'alpha': alphas,
+        'eta': etas,
+        'delta': deltas,
+        'beta': betas,
+        'gamma': gammas
     }
     df = pd.DataFrame(data)
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    
+    # Save to CSV
     df.to_csv(filename, index=False)
-    print(f"Results saved to {filename}")
+    print(f"Exponents saved to {filename}")
 
 # Function to load results from a CSV file
-def load_exponents_csv(filename="results/exponents.csv"):
+def load_exponents_csv(filename="../data/exponents.csv"):
     """
     Load critical exponents from a CSV file.
     
-    Args:
-        filename (str): Name of the file to load results from (default: 'results/exponents.csv').
-        
+    Parameters:
+    filename (str): Path to the CSV file
+    
     Returns:
-        tuple: (n_values, Jcs, nus, alphas, etas, deltas) as numpy arrays, or None if error.
+    tuple: Arrays of n_values, Jcs, nus, alphas, etas, deltas, betas, gammas
     """
-    try:
-        df = pd.read_csv(filename)
-        return (
-            df["n"].to_numpy(),
-            df["Jc"].to_numpy(),
-            df["nu"].to_numpy(),
-            df["alpha"].to_numpy(),
-            df["eta"].to_numpy(),
-            df["delta"].to_numpy()
-        )
-    except FileNotFoundError:
-        print(f"Error: File {filename} not found.")
-        return None
-    except KeyError as e:
-        print(f"Error: Missing column {e} in {filename}.")
-        return None
+    df = pd.read_csv(filename)
+    return (df['n'].values, df['Jc'].values, df['nu'].values, df['alpha'].values,
+            df['eta'].values, df['delta'].values, df['beta'].values, df['gamma'].values)
