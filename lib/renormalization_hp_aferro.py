@@ -351,3 +351,84 @@ def plot_J_c_vs_n(n_values, max_k=500, tol=1e-4, J_low=-3.0, J_high=-1e-10):
     plt.ylabel('$1/J_c$')
     plt.grid(True)
     plt.show()
+
+
+def find_n_c(J0, max_k=1000, tol=1e-6, n_low=0.8, n_high=2.0):
+    """
+    Finds the critical exponent n_c for fixed J0 > 0 using binary search and RG flow.
+
+    At low n: ferromagnetic (growing J(r=2) under RG)
+    At high n: paramagnetic (decaying J(r=2) under RG)
+
+    The function searches for n_c such that:
+      - For n < n_c: J(r=2) grows → ferromagnetic phase
+      - For n > n_c: J(r=2) decays → paramagnetic phase
+
+    Parameters:
+    J0 (float): Fixed ferromagnetic coupling strength (J > 0)
+    max_k (int): Maximum distance r in RG flow
+    tol (float): Convergence tolerance
+    n_low (float): Lower bound on n (must be > 0)
+    n_high (float): Upper bound on n (can be > 2)
+
+    Returns:
+    mp.mpf: Critical n_c where transition occurs
+    """
+    if J0 <= 0:
+        raise ValueError("J0 must be positive for the ferromagnetic case.")
+
+    start_track = 3
+    max_steps = 5
+    tol = mp.mpf(tol)
+    n_low = mp.mpf(n_low)
+    n_high = mp.mpf(n_high)
+    J0 = mp.mpf(J0)
+
+    min_max_k = 2
+    if max_k < min_max_k:
+        raise ValueError(f"max_k must be at least {min_max_k}")
+
+    def compute_flow(n_val):
+        J_func = lambda d: get_J(d, J0, n_val) if d > 0 else mp.mpf(0)
+        rs = list(range(1, max_k + 1))
+        all_Js = [[J_func(r) for r in rs]]
+
+        for step in range(1, max_steps + 1):
+            Jps = []
+            for r in rs:
+                start = 3 * r + 1
+                Jp = compute_J_prime_func(start, J_func)
+                Jps.append(Jp)
+            all_Js.append(Jps)
+
+            if step >= start_track:
+                J_r2_curr = Jps[1]
+                J_r2_prev = all_Js[-2][1]
+                if mp.almosteq(J_r2_curr, J_r2_prev, tol):
+                    return all_Js, False  # Treat near-equality as decay
+                if J_r2_curr > J_r2_prev:
+                    return all_Js, True   # Growing → ferromagnetic
+                else:
+                    return all_Js, False  # Decaying → paramagnetic
+
+            J_dict = {r: Jps[r-1] for r in rs}
+            J_func = lambda d: J_dict.get(d, mp.mpf(0)) if d > 0 else mp.mpf(0)
+
+        # Fallback: compare initial and final J(r=2)
+        J_init = all_Js[0][1]
+        J_final = all_Js[-1][1]
+        return all_Js, J_final > J_init
+
+    iter_count = 0
+    while n_high - n_low > tol and iter_count < 100:
+        iter_count += 1
+        n_mid = (n_low + n_high) / 2
+        _, is_growing = compute_flow(n_mid)
+
+        if is_growing:
+            n_low = n_mid   # Growing → too small n → move up
+        else:
+            n_high = n_mid  # Decaying → too large n → move down
+
+    n_c = (n_low + n_high) / 2
+    return n_c
