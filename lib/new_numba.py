@@ -1,21 +1,28 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import product
+from numba import njit
+
 
 # =========================
 # Utilities
 # =========================
 
+@njit(cache=True)
 def required_initial_max_distance(max_dist_final, n_steps):
     D = max_dist_final
     for _ in range(n_steps):
         D = 3 * D + 2
     return D
 
+@njit(cache=True)
 def logsumexp(values):
-    values = np.asarray(values, dtype=float)
     m = np.max(values)
-    return m + np.log(np.sum(np.exp(values - m)))
+    s = 0.0
+    for v in values:
+        s += np.exp(v - m)
+    return m + np.log(s)
+
 
 # =========================
 # Majority configurations (3-spin cell)
@@ -29,19 +36,26 @@ minus_configs = _all_spins[np.sum(_all_spins, axis=1) <= -1]
 # Intracell energies
 # =========================
 
+@njit(cache=True)
 def intracell_energies(spins, J):
     J1 = J[1] if len(J) > 1 else 0.0
     J2 = J[2] if len(J) > 2 else 0.0
 
-    E = np.empty(spins.shape[0], dtype=float)
-    for i, (s0, s1, s2) in enumerate(spins):
+    n = spins.shape[0]
+    E = np.empty(n, dtype=np.float64)
+    for i in range(n):
+        s0 = spins[i, 0]
+        s1 = spins[i, 1]
+        s2 = spins[i, 2]
         E[i] = J1 * (s0 * s1 + s1 * s2) + J2 * (s0 * s2)
     return E
+
 
 # =========================
 # RG step: J -> J'
 # =========================
 
+@njit(cache=True)
 def renormalized_coupling_for_r(r, J):
     D = len(J) - 1  # max distance available
 
@@ -50,17 +64,27 @@ def renormalized_coupling_for_r(r, J):
     E_minus = intracell_energies(minus_configs, J)
 
     # Positions of spins in the left and right cells
-    left_pos  = np.array([0, 1, 2])
-    right_pos = np.array([3 * r + 0, 3 * r + 1, 3 * r + 2])
+    left_pos  = np.array([0, 1, 2], dtype=np.int64)
+    right_pos = np.array([3 * r + 0, 3 * r + 1, 3 * r + 2], dtype=np.int64)
 
     # Precompute distances between them
-    distances = np.abs(right_pos[None, :] - left_pos[:, None])  # shape (3,3)
+    distances = np.empty((3, 3), dtype=np.int64)
+    for a in range(3):
+        for b in range(3):
+            distances[a, b] = abs(right_pos[b] - left_pos[a])
+
+    n_plus  = plus_configs.shape[0]   # 4
+    n_minus = minus_configs.shape[0]  # 4
 
     # R(++): left-majority+, right-majority+
-    totals_pp = []
-    for iL, sL in enumerate(plus_configs):
+    n_pp = n_plus * n_plus
+    totals_pp = np.empty(n_pp, dtype=np.float64)
+    idx = 0
+    for iL in range(n_plus):
+        sL = plus_configs[iL]
         EL = E_plus[iL]
-        for iR, sR in enumerate(plus_configs):
+        for iR in range(n_plus):
+            sR = plus_configs[iR]
             ER = E_plus[iR]
             E_int = 0.0
             for a in range(3):
@@ -68,13 +92,18 @@ def renormalized_coupling_for_r(r, J):
                     d = distances[a, b]
                     if d <= D:
                         E_int += J[d] * sL[a] * sR[b]
-            totals_pp.append(EL + ER + E_int)
+            totals_pp[idx] = EL + ER + E_int
+            idx += 1
 
     # R(+-): left-majority+, right-majority-
-    totals_pm = []
-    for iL, sL in enumerate(plus_configs):
+    n_pm = n_plus * n_minus
+    totals_pm = np.empty(n_pm, dtype=np.float64)
+    idx = 0
+    for iL in range(n_plus):
+        sL = plus_configs[iL]
         EL = E_plus[iL]
-        for iR, sR in enumerate(minus_configs):
+        for iR in range(n_minus):
+            sR = minus_configs[iR]
             ER = E_minus[iR]
             E_int = 0.0
             for a in range(3):
@@ -82,7 +111,8 @@ def renormalized_coupling_for_r(r, J):
                     d = distances[a, b]
                     if d <= D:
                         E_int += J[d] * sL[a] * sR[b]
-            totals_pm.append(EL + ER + E_int)
+            totals_pm[idx] = EL + ER + E_int
+            idx += 1
 
     log_R_pp = logsumexp(totals_pp)
     log_R_pm = logsumexp(totals_pm)
@@ -90,17 +120,22 @@ def renormalized_coupling_for_r(r, J):
     # Spin-flip symmetry: J'_r = 1/2 [ln R(++ ) - ln R(+-)]
     return 0.5 * (log_R_pp - log_R_pm)
 
+
+@njit(cache=True)
 def rg_step(J):
     D = len(J) - 1
     r_max = (D - 2) // 3
     if r_max < 1:
+        # Numba cannot raise ValueError cleanly in nopython mode,
+        # but we can still raise a generic error or return a sentinel.
         raise ValueError("Not enough range in J to perform another RG step.")
 
-    J_new = np.zeros(r_max + 1, dtype=float)  # index 0 unused
+    J_new = np.zeros(r_max + 1, dtype=np.float64)  # index 0 unused
     for r in range(1, r_max + 1):
         J_new[r] = renormalized_coupling_for_r(r, J)
 
     return J_new
+
 
 # =========================
 # RG flow driver (full, proper)
@@ -396,36 +431,41 @@ def check_fixed_point(J_star, tol=1e-6):
         print("✘ Not a fixed point (or tolerance too strict).")
     return err
 
+@njit(cache=True)
 def renormalized_field(J, H):
     """
     Compute renormalized magnetic field H' for a pair of neighbouring 3-spin blocks
     at couplings J and microscopic field H.
-
-    This mirrors the logic of long_range_ising_rg._Hprime but uses the full-length
-    coupling vector J and the geometry used in renormalized_coupling_for_r(r=1).
     """
     # Intracell energies for plus / minus majority blocks
     E_plus  = intracell_energies(plus_configs,  J)
     E_minus = intracell_energies(minus_configs, J)
 
-    # Geometry of two neighbouring blocks in the 1D chain:
-    # left block spins at positions 0,1,2; right block at 3,4,5
-    left_pos  = np.array([0, 1, 2], dtype=int)
-    right_pos = np.array([3, 4, 5], dtype=int)
+    # Geometry: left block 0,1,2; right block 3,4,5
+    left_pos  = np.array([0, 1, 2], dtype=np.int64)
+    right_pos = np.array([3, 4, 5], dtype=np.int64)
 
-    # Precompute pairwise distances between spins in left and right blocks
-    distances = np.abs(right_pos[None, :] - left_pos[:, None])  # shape (3,3)
+    # Distances between spins in left and right blocks
+    distances = np.empty((3, 3), dtype=np.int64)
+    for a in range(3):
+        for b in range(3):
+            distances[a, b] = abs(right_pos[b] - left_pos[a])
 
-    totals_pp = []
-    totals_mm = []
+    n_plus  = plus_configs.shape[0]
+    n_minus = minus_configs.shape[0]
 
     # R(++): left-majority+, right-majority+
-    for iL, sL in enumerate(plus_configs):
+    n_pp = n_plus * n_plus
+    totals_pp = np.empty(n_pp, dtype=np.float64)
+    idx = 0
+    for iL in range(n_plus):
+        sL = plus_configs[iL]
         EL = E_plus[iL]
-        magL = np.sum(sL)
-        for iR, sR in enumerate(plus_configs):
+        magL = sL[0] + sL[1] + sL[2]
+        for iR in range(n_plus):
+            sR = plus_configs[iR]
             ER = E_plus[iR]
-            magR = np.sum(sR)
+            magR = sR[0] + sR[1] + sR[2]
 
             E_int = 0.0
             for a in range(3):
@@ -434,15 +474,21 @@ def renormalized_field(J, H):
                     if d < len(J):
                         E_int += J[d] * sL[a] * sR[b]
 
-            totals_pp.append(EL + ER + E_int + H * (magL + magR))
+            totals_pp[idx] = EL + ER + E_int + H * (magL + magR)
+            idx += 1
 
     # R(--): left-majority-, right-majority-
-    for iL, sL in enumerate(minus_configs):
+    n_mm = n_minus * n_minus
+    totals_mm = np.empty(n_mm, dtype=np.float64)
+    idx = 0
+    for iL in range(n_minus):
+        sL = minus_configs[iL]
         EL = E_minus[iL]
-        magL = np.sum(sL)
-        for iR, sR in enumerate(minus_configs):
+        magL = sL[0] + sL[1] + sL[2]
+        for iR in range(n_minus):
+            sR = minus_configs[iR]
             ER = E_minus[iR]
-            magR = np.sum(sR)
+            magR = sR[0] + sR[1] + sR[2]
 
             E_int = 0.0
             for a in range(3):
@@ -451,21 +497,17 @@ def renormalized_field(J, H):
                     if d < len(J):
                         E_int += J[d] * sL[a] * sR[b]
 
-            totals_mm.append(EL + ER + E_int + H * (magL + magR))
-
-    if not totals_pp or not totals_mm:
-        return np.nan
+            totals_mm[idx] = EL + ER + E_int + H * (magL + magR)
+            idx += 1
 
     log_pp = logsumexp(totals_pp)
     log_mm = logsumexp(totals_mm)
-
-    if not np.isfinite(log_pp) or not np.isfinite(log_mm):
-        return np.nan
 
     # Standard relation: H' = 1/4 [ln Z_{++} - ln Z_{--}]
     return 0.25 * (log_pp - log_mm)
 
 
+@njit(cache=True)
 def dH_dH(J, eps=1e-8):
     """
     Finite-difference estimate of dH'/dH at H=0 for given couplings J.
@@ -478,6 +520,7 @@ def dH_dH(J, eps=1e-8):
         return np.nan
 
     return (H_eps - H0) / eps
+
 
 def magnetic_exponent_yH(J_star, eps=1e-8, b=3.0):
     alpha = dH_dH(J_star, eps=eps)
