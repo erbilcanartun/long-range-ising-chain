@@ -56,7 +56,7 @@ def intracell_energies(spins, J):
 # =========================
 
 @njit(cache=True)
-def renormalized_coupling_for_r(r, J):
+def log_Rpp_Rpm(r, J):
     D = len(J) - 1  # max distance available
 
     # Precompute intracell energies
@@ -117,8 +117,7 @@ def renormalized_coupling_for_r(r, J):
     log_R_pp = logsumexp(totals_pp)
     log_R_pm = logsumexp(totals_pm)
 
-    # Spin-flip symmetry: J'_r = 1/2 [ln R(++ ) - ln R(+-)]
-    return 0.5 * (log_R_pp - log_R_pm)
+    return log_R_pp, log_R_pm
 
 
 @njit(cache=True)
@@ -132,7 +131,8 @@ def rg_step(J):
 
     J_new = np.zeros(r_max + 1, dtype=np.float64)  # index 0 unused
     for r in range(1, r_max + 1):
-        J_new[r] = renormalized_coupling_for_r(r, J)
+        log_R_pp, log_R_pm = log_Rpp_Rpm(r, J)
+        J_new[r] = 0.5 * (log_R_pp - log_R_pm)
 
     return J_new
 
