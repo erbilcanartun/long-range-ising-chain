@@ -20,7 +20,14 @@ def logsumexp(values):
     return m + np.log(s)
 
 
-_all_spins = np.array(list(product([-1, 1], repeat=3)), dtype=int)
+def build_J(J0, a, D):
+    J = np.zeros(D + 1)
+    r = np.arange(1, D + 1)
+    J[1:] = J0 / (r**a)
+    return J
+
+    
+_all_spins = np.array(list(product([-1, 1], repeat=3)), dtype=np.int64)
 plus_configs  = _all_spins[np.sum(_all_spins, axis=1) >=  1]
 minus_configs = _all_spins[np.sum(_all_spins, axis=1) <= -1]
 
@@ -189,17 +196,15 @@ def rg_step(J):
     D = len(J) - 1
     r_max = (D - 2) // 3
 
-    J_new = np.zeros(r_max + 1, dtype=np.float64)  # index 0 unused
+    J_new = np.empty_like(J)
+    J_new[0] = 0.0
+    
     for r in range(1, r_max + 1):
         log_R_pp, log_R_pm = log_Rpp_Rpm(r, J)
         J_new[r] = 0.5 * (log_R_pp - log_R_pm)
 
     return J_new
 
-
-# =========================
-# RG flow driver (full, proper)
-# =========================
 
 def generate_rg_flow(J0, a, max_dist_final, n_steps, trace_TM=False, TM_r=1):
     D0 = required_initial_max_distance(max_dist_final, n_steps)
