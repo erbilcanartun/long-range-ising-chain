@@ -1,16 +1,30 @@
-from mpmath import mp
+import numpy as np
 import pandas as pd
+from numba import njit
 import os
 
 
-def mp_logsumexp(values):
-    if not values:
-        return mp.ninf
-    max_val = max(values)
-    sum_exp = mp.mpf(0)
-    for v in values:
-        sum_exp += mp.exp(v - max_val)
-    return max_val + mp.log(sum_exp)
+@njit(cache=True)
+def required_initial_max_distance(max_dist_final, n_steps):
+    D = max_dist_final
+    for _ in range(n_steps):
+        D = 3 * D + 2
+    return D
+
+
+@njit(cache=True)
+def logsumexp(values):
+    values = np.asarray(values, dtype=float)
+    m = np.max(values)
+    return m + np.log(np.sum(np.exp(values - m)))
+
+
+def build_J(J0, a, D):
+    J = np.zeros(D + 1)
+    r = np.arange(1, D + 1)
+    J[1:] = J0 / (r**a)
+    return J
+
 
 # Function to save results to a CSV file
 def save_exponents_csv(n_values, Jcs, nus, alphas, etas, deltas, betas, gammas, filename="../data/exponents.csv"):
@@ -42,6 +56,7 @@ def save_exponents_csv(n_values, Jcs, nus, alphas, etas, deltas, betas, gammas, 
     # Save to CSV
     df.to_csv(filename, index=False)
     print(f"Exponents saved to {filename}")
+
 
 # Function to load results from a CSV file
 def load_exponents_csv(filename="../data/exponents.csv"):
