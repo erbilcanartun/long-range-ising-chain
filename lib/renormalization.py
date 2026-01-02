@@ -2,8 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from itertools import product
 from numba import njit
-import sys, os
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), )))
 from utils import required_initial_max_distance, logsumexp, build_J
 
 
