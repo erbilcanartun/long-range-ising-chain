@@ -1,93 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from itertools import product
 from numba import njit
 from utils import required_initial_max_distance, logsumexp, build_J
-
-
-# Majority configurations (3-spin cell)
-_all_spins = np.array(list(product([-1, 1], repeat=3)), dtype=int)
-plus_configs  = _all_spins[np.sum(_all_spins, axis=1) >=  1]
-minus_configs = _all_spins[np.sum(_all_spins, axis=1) <= -1]
-
-
-@njit(cache=True)
-def intracell_energies(spins, J):
-    J2 = J[2] if len(J) > 2 else 0.0
-    J4 = J[4] if len(J) > 4 else 0.0
-
-    n = spins.shape[0]
-    E = np.empty(n, dtype=np.float64)
-    for i in range(n):
-        s0 = spins[i, 0]
-        s1 = spins[i, 1]
-        s2 = spins[i, 2]
-        E[i] = (J2 * (s0 * s1 + s1 * s2) + J4 * (s0 * s2))
-    return E
-
-
-@njit(cache=True)
-def log_Rpp_Rpm(r, J):
-    D = len(J) - 1
-
-    # Intracell energies
-    E_plus  = intracell_energies(plus_configs,  J)
-    E_minus = intracell_energies(minus_configs, J)
-
-    # Physical lattice positions
-    left_pos  = np.array([1, 3, 5], dtype=np.int64)
-    right_pos = np.array([2, 4, 6], dtype=np.int64) + 6 * r
-
-    # Distance matrix
-    distances = np.empty((3, 3), dtype=np.int64)
-    for a in range(3):
-        for b in range(3):
-            distances[a, b] = abs(right_pos[b] - left_pos[a])
-
-    n_plus  = plus_configs.shape[0]
-    n_minus = minus_configs.shape[0]
-
-    # R(++)
-    totals_pp = np.empty(n_plus * n_plus, dtype=np.float64)
-    idx = 0
-    for iL in range(n_plus):
-        sL = plus_configs[iL]
-        EL = E_plus[iL]
-        for iR in range(n_plus):
-            sR = plus_configs[iR]
-            ER = E_plus[iR]
-
-            E_int = 0.0
-            for a in range(3):
-                for b in range(3):
-                    d = distances[a, b]
-                    if d <= D:
-                        E_int += J[d] * sL[a] * sR[b]
-
-            totals_pp[idx] = EL + ER + E_int
-            idx += 1
-
-    # R(+-)
-    totals_pm = np.empty(n_plus * n_minus, dtype=np.float64)
-    idx = 0
-    for iL in range(n_plus):
-        sL = plus_configs[iL]
-        EL = E_plus[iL]
-        for iR in range(n_minus):
-            sR = minus_configs[iR]
-            ER = E_minus[iR]
-
-            E_int = 0.0
-            for a in range(3):
-                for b in range(3):
-                    d = distances[a, b]
-                    if d <= D:
-                        E_int += J[d] * sL[a] * sR[b]
-
-            totals_pm[idx] = EL + ER + E_int
-            idx += 1
-
-    return logsumexp(totals_pp), logsumexp(totals_pm)
+from decimation_contiguous import *
+#from decimation_staggered import *
 
 
 @njit(cache=True)
@@ -97,7 +13,7 @@ def rg_step(J):
 
     J_new = np.empty_like(J)
     J_new[0] = 0.0
-    
+
     for r in range(1, r_max + 1):
         log_R_pp, log_R_pm = log_Rpp_Rpm(r, J)
         J_new[r] = 0.5 * (log_R_pp - log_R_pm)
@@ -295,7 +211,7 @@ def recursion_matrix_at_fixed_point(J_star, N, eps=1e-6):
 
     return T, J_head
 
-    
+
 def newton_rg_lstsq(J_init,
                     max_iter=10,
                     tol=1e-8,
@@ -328,7 +244,7 @@ def newton_rg_lstsq(J_init,
 
     return J, {"converged": False, "iterations": max_iter}
 
-    
+
 def rg_map_fixed_head(J_head):
     N = len(J_head) - 1
     D_full = 3 * N + 20
@@ -390,88 +306,14 @@ def check_fixed_point(J_star, tol=1e-6):
     return err
 
 
-@njit(cache=True)
 def renormalized_field(J, H):
-    """
-    Compute renormalized magnetic field H' for a pair of neighbouring 3-spin blocks
-    at couplings J and microscopic field H.
-    """
-    # Intracell energies for plus / minus majority blocks
-    E_plus  = intracell_energies(plus_configs,  J)
-    E_minus = intracell_energies(minus_configs, J)
-
-    # Geometry: left block 0,1,2; right block 3,4,5
-    left_pos  = np.array([0, 1, 2], dtype=np.int64)
-    right_pos = np.array([3, 4, 5], dtype=np.int64)
-
-    # Distances between spins in left and right blocks
-    distances = np.empty((3, 3), dtype=np.int64)
-    for a in range(3):
-        for b in range(3):
-            distances[a, b] = abs(right_pos[b] - left_pos[a])
-
-    n_plus  = plus_configs.shape[0]
-    n_minus = minus_configs.shape[0]
-
-    # R(++): left-majority+, right-majority+
-    n_pp = n_plus * n_plus
-    totals_pp = np.empty(n_pp, dtype=np.float64)
-    idx = 0
-    for iL in range(n_plus):
-        sL = plus_configs[iL]
-        EL = E_plus[iL]
-        magL = sL[0] + sL[1] + sL[2]
-        for iR in range(n_plus):
-            sR = plus_configs[iR]
-            ER = E_plus[iR]
-            magR = sR[0] + sR[1] + sR[2]
-
-            E_int = 0.0
-            for a in range(3):
-                for b in range(3):
-                    d = distances[a, b]
-                    if d < len(J):
-                        E_int += J[d] * sL[a] * sR[b]
-
-            totals_pp[idx] = EL + ER + E_int + H * (magL + magR)
-            idx += 1
-
-    # R(--): left-majority-, right-majority-
-    n_mm = n_minus * n_minus
-    totals_mm = np.empty(n_mm, dtype=np.float64)
-    idx = 0
-    for iL in range(n_minus):
-        sL = minus_configs[iL]
-        EL = E_minus[iL]
-        magL = sL[0] + sL[1] + sL[2]
-        for iR in range(n_minus):
-            sR = minus_configs[iR]
-            ER = E_minus[iR]
-            magR = sR[0] + sR[1] + sR[2]
-
-            E_int = 0.0
-            for a in range(3):
-                for b in range(3):
-                    d = distances[a, b]
-                    if d < len(J):
-                        E_int += J[d] * sL[a] * sR[b]
-
-            totals_mm[idx] = EL + ER + E_int + H * (magL + magR)
-            idx += 1
-
-    log_pp = logsumexp(totals_pp)
-    log_mm = logsumexp(totals_mm)
-
-    # Standard relation: H' = 1/4 [ln Z_{++} - ln Z_{--}]
+    log_pp, log_mm = log_Rpp_Rpm_nonzero_H(J, H)
+    # H' = 1/4 [ln Z{++} - ln Z{--}]
     return 0.25 * (log_pp - log_mm)
 
 
 @njit(cache=True)
 def dH_dH(J, eps=1e-8):
-    """
-    Finite-difference estimate of dH'/dH at H=0 for given couplings J.
-    Uses renormalized_field(J, H).
-    """
     H0    = renormalized_field(J, 0.0)
     H_eps = renormalized_field(J, eps)
 

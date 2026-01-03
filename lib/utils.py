@@ -14,7 +14,6 @@ def required_initial_max_distance(max_dist_final, n_steps):
 
 @njit(cache=True)
 def logsumexp(values):
-    values = np.asarray(values, dtype=float)
     m = np.max(values)
     return m + np.log(np.sum(np.exp(values - m)))
 
