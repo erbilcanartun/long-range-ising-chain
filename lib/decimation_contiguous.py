@@ -29,13 +29,13 @@ def intracell_energies(spins, J):
 def log_Rpp_Rpm(r, J):
     D = len(J) - 1
 
-    # Intracell energies consistent with contiguous block geometry
+    # Intracell energies (cell geometry is distance-1 spacing: {1,1,2})
     E_plus  = intracell_energies(plus_configs,  J)
     E_minus = intracell_energies(minus_configs, J)
 
     # Physical lattice positions
     left_pos  = np.array([1, 2, 3], dtype=np.int64)
-    right_pos = (np.array([3, 4, 5], dtype=np.int64) + r).astype(np.int64)
+    right_pos = (np.array([4, 5, 6], dtype=np.int64) + 3 * (r - 1)).astype(np.int64)
 
     # Distance matrix
     distances = np.empty((3, 3), dtype=np.int64)
@@ -93,7 +93,7 @@ def log_Rpp_Rpm(r, J):
 
 
 @njit(cache=True)
-def log_Rpp_Rpm_nonzero_H(J, H):
+def log_Rpp_Rmm_nonzero_H(J, H):
     E_plus  = intracell_energies(plus_configs,  J)
     E_minus = intracell_energies(minus_configs, J)
 

@@ -7,29 +7,68 @@ from decimation_contiguous import *
 
 
 @njit(cache=True)
-def rg_step(J):
+def rg_step(J, a=None):
     D = len(J) - 1
-    r_max = (D - 2) // 3
+    r_max = (D - 2) // 3 # distance cutoff for sliding by one block
+    #r_max = D - 4 # distance cutoff for sliding by one site
 
-    J_new = np.empty_like(J)
+    J_new = np.zeros_like(J)
     J_new[0] = 0.0
 
+    # Head: exact renormalization
     for r in range(1, r_max + 1):
         log_R_pp, log_R_pm = log_Rpp_Rpm(r, J)
         J_new[r] = 0.5 * (log_R_pp - log_R_pm)
+
+    # Tail: power-law continuation
+    if a:
+        anchor = J_new[r_max]
+        for r in range(r_max + 1, D + 1):
+            J_new[r] = anchor * (r_max / r) ** a
 
     return J_new
 
 
 @njit(cache=True)
 def renormalized_field(J, H):
-    log_pp, log_mm = log_Rpp_Rpm_nonzero_H(J, H)
     # H' = 1/4 [ln Z{++} - ln Z{--}]
+    log_pp, log_mm = log_Rpp_Rmm_nonzero_H(J, H)
     return 0.25 * (log_pp - log_mm)
 
 
 @njit(cache=True)
+def G_r_prime(r, J):
+    log_R_pp, log_R_pm = log_Rpp_Rpm(r, J)
+    G_r = 0.5 * (log_R_pp + log_R_pm)
+    return G_r
+
+
+@njit(cache=True)
+def G_prime(J):
+    D = len(J) - 1
+    r_max = (D - 2) // 3
+    G_new = np.zeros(r_max + 1, dtype=np.float64)
+    for r in range(1, r_max + 1):
+        G_new[r] = G_r_prime(r, J)
+    return G_new
+
+
+def phi_from_G(J_init, max_steps=8, a=None):
+    J = J_init.copy()
+    phi = 0.0
+    for k in range(max_steps):
+        G_vec = G_prime(J)
+        G_k = np.sum(G_vec)
+        phi += (1 / 3**(k+1)) * G_k
+        J = rg_step(J, a=a)
+    return phi
+
+
+@njit(cache=True)
 def dH_dH(J, eps=1e-6):
+    """
+    Derivative dH'/dH at H=0, via finite difference.
+    """
     H0    = renormalized_field(J, 0.0)
     H_eps = renormalized_field(J, eps)
 
@@ -39,8 +78,9 @@ def dH_dH(J, eps=1e-6):
     return (H_eps - H0) / eps
 
 
-def find_Jc(a, Jlow=0.1, Jhigh=12.0, max_steps=6, max_dist_final=5,
-            tol=1e-8, growth_threshold=1e6, decay_threshold=1e-6):
+def find_Jc(a, Jlow=1e-2, Jhigh=1e2, max_steps=6, max_dist_final=9,
+            tol=1e-5, growth_threshold=1e3, decay_threshold=1e-3):
+
     if not (0 < a <= 2):
         raise ValueError("a must be in (0,2)")
 
@@ -158,9 +198,6 @@ def thermal_exponent_from_T(T, b=3.0):
 
     y_T = np.log(abs(lambda_T)) / np.log(b)
     return y_T, lambda_T, eigvals_sorted
-
-
-
 
 
 def magnetic_exponent_yH(J_star, eps=1e-8, b=3.0):

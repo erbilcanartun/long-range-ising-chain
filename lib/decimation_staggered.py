@@ -34,7 +34,7 @@ def log_Rpp_Rpm(r, J):
     E_minus = intracell_energies(minus_configs, J)
 
     left_pos  = np.array([1, 3, 5], dtype=np.int64)
-    right_pos = (np.array([2, 4, 6], dtype=np.int64) + 2 * r).astype(np.int64)
+    right_pos = (np.array([2, 4, 6], dtype=np.int64) + 3 * (r - 1)).astype(np.int64)
 
     # Distance matrix
     distances = np.empty((3, 3), dtype=np.int64)
@@ -92,7 +92,7 @@ def log_Rpp_Rpm(r, J):
 
 
 @njit(cache=True)
-def log_Rpp_Rpm_nonzero_H(J, H):
+def log_Rpp_Rmm_nonzero_H(J, H):
     E_plus  = intracell_energies(plus_configs,  J)
     E_minus = intracell_energies(minus_configs, J)
 
