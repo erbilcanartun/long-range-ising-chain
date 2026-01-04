@@ -29,7 +29,7 @@ def build_J(J0, a, D):
 def save_exponents_csv(n_values, Jcs, nus, alphas, etas, deltas, betas, gammas, filename="../data/exponents.csv"):
     """
     Save critical exponents and critical couplings to a CSV file.
-    
+
     Parameters:
     n_values (array): Array of power-law exponents (a in the paper)
     Jcs (array): Array of critical couplings
@@ -38,7 +38,7 @@ def save_exponents_csv(n_values, Jcs, nus, alphas, etas, deltas, betas, gammas, 
     """
     # Ensure the directory exists
     os.makedirs(os.path.dirname(filename), exist_ok=True)
-    
+
     # Create DataFrame
     data = {
         'n': n_values,
@@ -51,7 +51,7 @@ def save_exponents_csv(n_values, Jcs, nus, alphas, etas, deltas, betas, gammas, 
         'gamma': gammas
     }
     df = pd.DataFrame(data)
-    
+
     # Save to CSV
     df.to_csv(filename, index=False)
     print(f"Exponents saved to {filename}")
@@ -61,10 +61,10 @@ def save_exponents_csv(n_values, Jcs, nus, alphas, etas, deltas, betas, gammas, 
 def load_exponents_csv(filename="../data/exponents.csv"):
     """
     Load critical exponents from a CSV file.
-    
+
     Parameters:
     filename (str): Path to the CSV file
-    
+
     Returns:
     tuple: Arrays of n_values, Jcs, nus, alphas, etas, deltas, betas, gammas
     """
