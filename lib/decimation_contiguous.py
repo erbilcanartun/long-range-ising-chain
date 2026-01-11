@@ -4,6 +4,11 @@ from itertools import product
 from utils import logsumexp
 
 
+@njit(cache=True)
+def r_max(D):
+    return (D - 2) // 3
+
+
 # Majority configurations (3-spin cell)
 _all_spins = np.array(list(product([-1, 1], repeat=3)), dtype=int)
 plus_configs  = _all_spins[np.sum(_all_spins, axis=1) >=  1]

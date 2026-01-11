@@ -4,6 +4,17 @@ from itertools import product
 from utils import logsumexp
 
 
+@njit(cache=True)
+def r_max(D):
+    r = 1
+    while True:
+        rp = right_pos_staggered(r)
+        dmax = rp[2] - 1   # max(right) - min(left) = (m+4) - 1
+        if dmax > D:
+            return r - 1
+        r += 1
+
+
 # Majority configurations (3-spin cell)
 _all_spins = np.array(list(product([-1, 1], repeat=3)), dtype=int)
 plus_configs  = _all_spins[np.sum(_all_spins, axis=1) >=  1]
@@ -26,6 +37,17 @@ def intracell_energies(spins, J):
 
 
 @njit(cache=True)
+def right_pos_staggered(r):
+    if r % 2 == 1:          # r = 1,3,5,...  (even-type cell)
+        k = (r - 1) // 2
+        m = 2 + 6 * k
+    else:                   # r = 2,4,6,...  (odd-type cell)
+        k = (r - 2) // 2
+        m = 7 + 6 * k
+    return np.array([m, m+2, m+4], dtype=np.int64)
+
+
+@njit(cache=True)
 def log_Rpp_Rpm(r, J):
     D = len(J) - 1
 
@@ -33,8 +55,9 @@ def log_Rpp_Rpm(r, J):
     E_plus  = intracell_energies(plus_configs,  J)
     E_minus = intracell_energies(minus_configs, J)
 
+    # Physical lattice positions
     left_pos  = np.array([1, 3, 5], dtype=np.int64)
-    right_pos = (np.array([2, 4, 6], dtype=np.int64) + 3 * (r - 1)).astype(np.int64)
+    right_pos = right_pos_staggered(r)
 
     # Distance matrix
     distances = np.empty((3, 3), dtype=np.int64)

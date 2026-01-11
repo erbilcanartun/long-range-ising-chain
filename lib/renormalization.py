@@ -2,15 +2,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numba import njit
 from utils import required_initial_max_distance, logsumexp, build_J
-from decimation_contiguous import *
-#from decimation_staggered import *
+#from decimation_contiguous import *
+from decimation_staggered import *
+
+
+@njit(cache=True)
+def determine_r_max(D):
+    return r_max(D)
 
 
 @njit(cache=True)
 def rg_step(J, a=None):
     D = len(J) - 1
-    r_max = (D - 2) // 3 # distance cutoff for sliding by one block
-    #r_max = D - 4 # distance cutoff for sliding by one site
+    r_max = determine_r_max(D)
 
     J_new = np.zeros_like(J)
     J_new[0] = 0.0
@@ -46,7 +50,7 @@ def G_r_prime(r, J):
 @njit(cache=True)
 def G_prime(J):
     D = len(J) - 1
-    r_max = (D - 2) // 3
+    r_max = determine_r_max(D)
     G_new = np.zeros(r_max + 1, dtype=np.float64)
     for r in range(1, r_max + 1):
         G_new[r] = G_r_prime(r, J)

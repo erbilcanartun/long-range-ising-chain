@@ -2,9 +2,7 @@ import numpy as np
 from itertools import product
 from numba import njit
 
-# ----------------------------
-# Majority-rule blocks (same as before)
-# ----------------------------
+
 _all_spins = np.array(list(product([-1,1], repeat=3)), dtype=np.int64)
 plus_configs  = _all_spins[np.sum(_all_spins, axis=1) >=  1]
 minus_configs = _all_spins[np.sum(_all_spins, axis=1) <= -1]
