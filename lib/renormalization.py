@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from numba import njit
-from utils import required_initial_max_distance, logsumexp, build_J
+from utils import logsumexp, build_J
 #from decimation_contiguous import *
 from decimation_staggered import *
 

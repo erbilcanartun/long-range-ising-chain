@@ -4,12 +4,7 @@ from numba import njit
 import os
 
 
-@njit(cache=True)
-def required_initial_max_distance(max_dist_final, n_steps):
-    D = max_dist_final
-    for _ in range(n_steps):
-        D = 3 * D + 2
-    return D
+
 
 
 @njit(cache=True)
