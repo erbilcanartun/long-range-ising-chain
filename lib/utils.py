@@ -4,9 +4,6 @@ from numba import njit
 import os
 
 
-
-
-
 @njit(cache=True)
 def logsumexp(values):
     m = np.max(values)
