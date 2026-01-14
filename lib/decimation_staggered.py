@@ -4,6 +4,12 @@ from itertools import product
 from utils import logsumexp
 
 
+# Majority configurations (3-spin cell)
+_all_spins = np.array(list(product([-1, 1], repeat=3)), dtype=int)
+plus_configs  = _all_spins[np.sum(_all_spins, axis=1) >=  1]
+minus_configs = _all_spins[np.sum(_all_spins, axis=1) <= -1]
+
+
 @njit(cache=True)
 def required_initial_max_distance(max_dist_final, n_steps):
     D = max_dist_final
@@ -14,6 +20,15 @@ def required_initial_max_distance(max_dist_final, n_steps):
             D = 3 * D + 4
     return D
 
+@njit(cache=True)
+def right_pos_staggered(r):
+    if r % 2 == 1:          # r = 1,3,5,...  (even-type cell)
+        k = (r - 1) // 2
+        m = 2 + 6 * k
+    else:                   # r = 2,4,6,...  (odd-type cell)
+        k = (r - 2) // 2
+        m = 7 + 6 * k
+    return np.array([m, m + 2, m + 4], dtype=np.int64)
 
 @njit(cache=True)
 def r_max(D):
@@ -24,13 +39,6 @@ def r_max(D):
         if dmax > D:
             return r - 1
         r += 1
-
-
-# Majority configurations (3-spin cell)
-_all_spins = np.array(list(product([-1, 1], repeat=3)), dtype=int)
-plus_configs  = _all_spins[np.sum(_all_spins, axis=1) >=  1]
-minus_configs = _all_spins[np.sum(_all_spins, axis=1) <= -1]
-
 
 @njit(cache=True)
 def intracell_energies(spins, J):
@@ -45,18 +53,6 @@ def intracell_energies(spins, J):
         s2 = spins[i, 2]
         E[i] = (J2 * (s0 * s1 + s1 * s2) + J4 * (s0 * s2))
     return E
-
-
-@njit(cache=True)
-def right_pos_staggered(r):
-    if r % 2 == 1:          # r = 1,3,5,...  (even-type cell)
-        k = (r - 1) // 2
-        m = 2 + 6 * k
-    else:                   # r = 2,4,6,...  (odd-type cell)
-        k = (r - 2) // 2
-        m = 7 + 6 * k
-    return np.array([m, m+2, m+4], dtype=np.int64)
-
 
 @njit(cache=True)
 def log_Rpp_Rpm(r, J):
@@ -121,9 +117,7 @@ def log_Rpp_Rpm(r, J):
 
     log_pp = logsumexp(totals_pp)
     log_pm = logsumexp(totals_pm)
-
     return log_pp, log_pm
-
 
 @njit(cache=True)
 def log_Rpp_Rmm_nonzero_H(J, H):
@@ -189,5 +183,4 @@ def log_Rpp_Rmm_nonzero_H(J, H):
 
     log_pp = logsumexp(totals_pp)
     log_mm = logsumexp(totals_mm)
-
     return log_pp, log_mm

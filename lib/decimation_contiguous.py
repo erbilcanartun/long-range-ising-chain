@@ -4,6 +4,12 @@ from itertools import product
 from utils import logsumexp
 
 
+# Majority configurations (3-spin cell)
+_all_spins = np.array(list(product([-1, 1], repeat=3)), dtype=int)
+plus_configs  = _all_spins[np.sum(_all_spins, axis=1) >=  1]
+minus_configs = _all_spins[np.sum(_all_spins, axis=1) <= -1]
+
+
 @njit(cache=True)
 def required_initial_max_distance(max_dist_final, n_steps):
     D = max_dist_final
@@ -11,17 +17,9 @@ def required_initial_max_distance(max_dist_final, n_steps):
         D = 3 * D + 2
     return D
 
-
 @njit(cache=True)
 def r_max(D):
     return (D - 2) // 3
-
-
-# Majority configurations (3-spin cell)
-_all_spins = np.array(list(product([-1, 1], repeat=3)), dtype=int)
-plus_configs  = _all_spins[np.sum(_all_spins, axis=1) >=  1]
-minus_configs = _all_spins[np.sum(_all_spins, axis=1) <= -1]
-
 
 @njit(cache=True)
 def intracell_energies(spins, J):
@@ -36,7 +34,6 @@ def intracell_energies(spins, J):
         s2 = spins[i, 2]
         E[i] = (J1 * (s0 * s1 + s1 * s2) + J2 * (s0 * s2))
     return E
-
 
 @njit(cache=True)
 def log_Rpp_Rpm(r, J):
@@ -101,9 +98,7 @@ def log_Rpp_Rpm(r, J):
 
     log_pp = logsumexp(totals_pp)
     log_pm = logsumexp(totals_pm)
-
     return log_pp, log_pm
-
 
 @njit(cache=True)
 def log_Rpp_Rmm_nonzero_H(J, H):

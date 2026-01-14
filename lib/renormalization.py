@@ -10,7 +10,6 @@ from decimation_staggered import *
 def determine_r_max(D):
     return r_max(D)
 
-
 @njit(cache=True)
 def rg_step(J, a=None):
     D = len(J) - 1
@@ -29,9 +28,7 @@ def rg_step(J, a=None):
         anchor = J_new[r_max]
         for r in range(r_max + 1, D + 1):
             J_new[r] = anchor * (r_max / r) ** a
-
     return J_new
-
 
 @njit(cache=True)
 def renormalized_field(J, H):
@@ -39,13 +36,11 @@ def renormalized_field(J, H):
     log_pp, log_mm = log_Rpp_Rmm_nonzero_H(J, H)
     return 0.25 * (log_pp - log_mm)
 
-
 @njit(cache=True)
 def G_r_prime(r, J):
     log_R_pp, log_R_pm = log_Rpp_Rpm(r, J)
     G_r = 0.5 * (log_R_pp + log_R_pm)
     return G_r
-
 
 @njit(cache=True)
 def G_prime(J):
@@ -55,7 +50,6 @@ def G_prime(J):
     for r in range(1, r_max + 1):
         G_new[r] = G_r_prime(r, J)
     return G_new
-
 
 def phi_from_G(J_init, max_steps=8, a=None):
     J = J_init.copy()
@@ -67,7 +61,6 @@ def phi_from_G(J_init, max_steps=8, a=None):
         J = rg_step(J, a=a)
     return phi
 
-
 @njit(cache=True)
 def dH_dH(J, eps=1e-6):
     """
@@ -78,13 +71,10 @@ def dH_dH(J, eps=1e-6):
 
     if not np.isfinite(H0) or not np.isfinite(H_eps):
         return np.nan
-
     return (H_eps - H0) / eps
-
 
 def find_Jc(a, Jlow=1e-2, Jhigh=1e2, max_steps=6, max_dist_final=9,
             tol=1e-5, growth_threshold=1e3, decay_threshold=1e-3):
-
     if not (0 < a <= 2):
         raise ValueError("a must be in (0,2)")
 
@@ -115,9 +105,7 @@ def find_Jc(a, Jlow=1e-2, Jhigh=1e2, max_steps=6, max_dist_final=9,
             Jhigh = Jmid
         else:
             Jlow = Jmid
-
     return 0.5 * (Jlow + Jhigh)
-
 
 def construct_transfer_matrix(J, r, normalize=True):
     if r >= len(J):
@@ -132,7 +120,6 @@ def construct_transfer_matrix(J, r, normalize=True):
     if normalize:
         T = T / np.max(T)
     return T
-
 
 def determine_phase_from_TM(T, threshold=0.1):
     L = T[0, 0]
