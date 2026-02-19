@@ -2,8 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numba import njit
 from utils import logsumexp, build_J
-#from decimation_contiguous import *
-from decimation_staggered import *
+from decimation_contiguous import *
+#from decimation_staggered import *
 
 
 @njit(cache=True)
@@ -24,7 +24,7 @@ def rg_step(J, a=None):
         J_new[r] = 0.5 * (log_R_pp - log_R_pm)
 
     # Tail: power-law continuation
-    if a:
+    if a is not None:
         anchor = J_new[r_max]
         for r in range(r_max + 1, D + 1):
             J_new[r] = anchor * (r_max / r) ** a
@@ -75,8 +75,8 @@ def dH_dH(J, eps=1e-6):
 
 def find_Jc(a, Jlow=1e-2, Jhigh=1e2, max_steps=6, max_dist_final=9,
             tol=1e-5, growth_threshold=1e3, decay_threshold=1e-3):
-    if not (0 < a <= 2):
-        raise ValueError("a must be in (0,2)")
+    if not (0 <= a <= 2):
+        raise ValueError("a must be in [0,2]")
 
     def grows(J0):
         # Build full-length J vector big enough to allow max_steps RG steps
