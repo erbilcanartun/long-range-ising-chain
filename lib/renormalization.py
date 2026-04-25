@@ -2,8 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numba import njit
 from utils import logsumexp, build_J
-from decimation_contiguous import *
-#from decimation_staggered import *
+#from decimation_contiguous import *
+from decimation_staggered import *
 
 
 @njit(cache=True)
