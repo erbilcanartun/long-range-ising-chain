@@ -1,4 +1,7 @@
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import to_rgb
+from matplotlib.patches import Patch
 from numba import njit
 from utils import _xorshift64star_next
 from decimation_staggered import (
