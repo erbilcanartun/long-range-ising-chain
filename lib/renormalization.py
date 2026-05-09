@@ -2,8 +2,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numba import njit
 from utils import logsumexp, build_J
-#from decimation_contiguous import *
-from decimation_staggered import *
+from decimation_contiguous import *
+#from decimation_staggered import *
+
+from decimation_contiguous import __cell_geometry__
+#from decimation_staggered import __cell_geometry__
+__which_geometry__ = __cell_geometry__
 
 
 @njit(cache=True)
@@ -75,8 +79,8 @@ def dH_dH(J, eps=1e-6):
 
 def find_Jc(a, Jlow=1e-2, Jhigh=1e2, max_steps=6, max_dist_final=9,
             tol=1e-5, growth_threshold=1e3, decay_threshold=1e-3):
-    if not (0 <= a <= 2):
-        raise ValueError("a must be in [0,2]")
+    #if not (0 <= a <= 2):
+    #    raise ValueError("a must be in [0,2]")
 
     def grows(J0):
         # Build full-length J vector big enough to allow max_steps RG steps
