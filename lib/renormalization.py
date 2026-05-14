@@ -86,21 +86,21 @@ def find_Jc(a, Jlow=1e-2, Jhigh=1e2, max_steps=6, max_dist_final=9,
         # Build full-length J vector big enough to allow max_steps RG steps
         D0 = required_initial_max_distance(max_dist_final, max_steps)
         J = build_J(J0, a, D0)
-        J1_initial = abs(J[1])
-
+        r = 5
+        Jr_initial = abs(J[r])
         for _ in range(max_steps):
 
             # early decision:
-            if abs(J[1]) > growth_threshold:
+            if abs(J[r]) > growth_threshold:
                 return True   # flows to ordered phase
-            if abs(J[1]) < decay_threshold:
+            if abs(J[r]) < decay_threshold:
                 return False  # flows to disordered phase
 
             # apply full RG step
             J = rg_step(J)
 
         # fallback: check increasing or decreasing tendency
-        return abs(J[1]) > J1_initial
+        return abs(J[r]) > Jr_initial
 
     # Bisection on J0: growth → ordered, decay → disordered
     while (Jhigh - Jlow) > tol:
