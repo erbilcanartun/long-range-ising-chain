@@ -2,11 +2,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numba import njit
 from utils import logsumexp, build_J
-from decimation_contiguous import *
-#from decimation_staggered import *
+#from decimation_contiguous import *
+from decimation_staggered import *
 
-from decimation_contiguous import __cell_geometry__
-#from decimation_staggered import __cell_geometry__
+#from decimation_contiguous import __cell_geometry__
+from decimation_staggered import __cell_geometry__
 __which_geometry__ = __cell_geometry__
 
 
